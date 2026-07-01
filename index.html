@@ -191,6 +191,40 @@
             const [isImporting, setIsImporting] = useState(false);
             const [importMessage, setImportMessage] = useState(null);
 
+            // --- Thêm state cho sửa tên đề ---
+            const [editingExamId, setEditingExamId] = useState(null);
+            const [editingTitle, setEditingTitle] = useState("");
+            const [isSavingTitle, setIsSavingTitle] = useState(false);
+
+            const startEditTitle = (exam) => {
+                setEditingExamId(exam.id);
+                setEditingTitle(exam.title || "");
+            };
+
+            const cancelEditTitle = () => {
+                setEditingExamId(null);
+                setEditingTitle("");
+            };
+
+            const saveEditTitle = async (examId) => {
+                const trimmedTitle = (editingTitle || "").trim();
+                if (!trimmedTitle) {
+                    alert("Tên đề thi không được để trống.");
+                    return;
+                }
+
+                setIsSavingTitle(true);
+                try {
+                    await db.ref(`exams/${examId}/title`).set(trimmedTitle);
+                    alert("Đã cập nhật tên đề thi.");
+                    cancelEditTitle();
+                } catch (err) {
+                    alert("Lỗi cập nhật tên đề thi: " + err.message);
+                } finally {
+                    setIsSavingTitle(false);
+                }
+            };
+
             const handleImportCSV = (e) => {
                 const file = e.target.files?.[0];
                 if (!file || isImporting) return;
@@ -350,10 +384,57 @@
                                     <tr><td colSpan="3" className="p-4 text-center text-gray-400">Chưa có đề thi nào trên Cloud Database</td></tr>
                                 ) : exams.map(exam => (
                                     <tr key={exam.id} className="hover:bg-gray-50 transition">
-                                        <td className="p-3 border-b font-medium text-gray-800">{exam.title}</td>
+                                        <td className="p-3 border-b font-medium text-gray-800">
+                                            {editingExamId === exam.id ? (
+                                                <input
+                                                    type="text"
+                                                    value={editingTitle}
+                                                    onChange={(e) => setEditingTitle(e.target.value)}
+                                                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                    placeholder="Nhập tên đề thi..."
+                                                    disabled={isSavingTitle}
+                                                />
+                                            ) : (
+                                                exam.title
+                                            )}
+                                        </td>
                                         <td className="p-3 border-b text-gray-600">{exam.questions.length}</td>
                                         <td className="p-3 border-b">
-                                            <button onClick={() => handleDelete(exam.id)} className="text-red-500 hover:text-red-700 font-medium">Xóa vĩnh viễn</button>
+                                            <div className="flex items-center gap-3 flex-wrap">
+                                                {editingExamId === exam.id ? (
+                                                    <>
+                                                        <button
+                                                            onClick={() => saveEditTitle(exam.id)}
+                                                            className="text-indigo-600 hover:text-indigo-800 font-medium disabled:opacity-50"
+                                                            disabled={isSavingTitle}
+                                                        >
+                                                            {isSavingTitle ? "Đang lưu..." : "Lưu"}
+                                                        </button>
+                                                        <button
+                                                            onClick={cancelEditTitle}
+                                                            className="text-gray-500 hover:text-gray-700 font-medium"
+                                                            disabled={isSavingTitle}
+                                                        >
+                                                            Hủy
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => startEditTitle(exam)}
+                                                        className="text-blue-600 hover:text-blue-800 font-medium"
+                                                    >
+                                                        Sửa
+                                                    </button>
+                                                )}
+
+                                                <button
+                                                    onClick={() => handleDelete(exam.id)}
+                                                    className="text-red-500 hover:text-red-700 font-medium"
+                                                    disabled={isSavingTitle && editingExamId === exam.id}
+                                                >
+                                                    Xóa vĩnh viễn
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
