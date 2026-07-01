@@ -188,9 +188,15 @@
 
         // 4. Admin panel
         const AdminPanel = ({ exams, loading }) => {
+            const [isImporting, setIsImporting] = useState(false);
+            const [importMessage, setImportMessage] = useState(null);
+
             const handleImportCSV = (e) => {
                 const file = e.target.files?.[0];
-                if (!file) return;
+                if (!file || isImporting) return;
+
+                setImportMessage({ type: "info", text: "Đang đọc file CSV..." });
+                setIsImporting(true);
 
                 Papa.parse(file, {
                     header: true,
@@ -198,7 +204,8 @@
                     transformHeader: (h) => h.replace(/^\uFEFF/, "").trim(),
                     complete: ({ data, errors }) => {
                         if (errors?.length) {
-                            alert("CSV parse lỗi: " + errors[0].message);
+                            setImportMessage({ type: "error", text: "CSV parse lỗi: " + errors[0].message });
+                            setIsImporting(false);
                             e.target.value = "";
                             return;
                         }
@@ -228,10 +235,16 @@
                         }).filter(Boolean);
 
                         if (questions.length === 0) {
-                            alert("Không có câu hỏi hợp lệ. Kiểm tra đúng header: Question, Option1, Option2, Option3, Option4, CorrectIndex(0-3), Explanation");
+                            setImportMessage({
+                                type: "error",
+                                text: "Không có câu hỏi hợp lệ. Kiểm tra đúng header: Question, Option1, Option2, Option3, Option4, CorrectIndex(0-3), Explanation"
+                            });
+                            setIsImporting(false);
                             e.target.value = "";
                             return;
                         }
+
+                        setImportMessage({ type: "info", text: `Đang tải ${questions.length} câu hỏi lên đám mây...` });
 
                         const newExam = {
                             title: `Đề thi CSV - Ngày ${new Date().toLocaleDateString("vi-VN")}`,
@@ -240,14 +253,21 @@
                         };
 
                         db.ref("exams").push(newExam)
-                            .then(() => alert(`Import thành công ${questions.length} câu hỏi lên đám mây!`))
-                            .catch(err => alert("Lỗi tải dữ liệu lên đám mây: " + err.message))
+                            .then(() => {
+                                setImportMessage({ type: "success", text: `✅ Import bài thi thành công (${questions.length} câu hỏi)!` });
+                                alert(`Import bài thi thành công (${questions.length} câu hỏi)!`);
+                            })
+                            .catch(err => {
+                                setImportMessage({ type: "error", text: "Lỗi tải dữ liệu lên đám mây: " + err.message });
+                            })
                             .finally(() => {
+                                setIsImporting(false);
                                 e.target.value = "";
                             });
                     },
                     error: (err) => {
-                        alert("Không thể đọc file CSV: " + err.message);
+                        setImportMessage({ type: "error", text: "Không thể đọc file CSV: " + err.message });
+                        setIsImporting(false);
                         e.target.value = "";
                     }
                 });
@@ -288,12 +308,31 @@
                         <h2 className="text-xl font-bold text-gray-700">Bảng điều khiển Admin (Mạng Đám Mây)</h2>
                         <div className="flex gap-2">
                             <button onClick={downloadSampleCSV} className="text-sm px-4 py-2 border rounded hover:bg-gray-50 font-medium">Tải CSV mẫu</button>
-                            <label className="cursor-pointer bg-green-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-green-700 transition">
-                                Import CSV
-                                <input type="file" accept=".csv" className="hidden" onChange={handleImportCSV} />
+                            <label className={`cursor-pointer px-4 py-2 rounded text-sm font-medium transition text-white ${isImporting ? "bg-green-400 cursor-not-allowed" : "bg-green-600 hover:bg-green-700"}`}>
+                                {isImporting ? "Đang import..." : "Import CSV"}
+                                <input type="file" accept=".csv" className="hidden" onChange={handleImportCSV} disabled={isImporting} />
                             </label>
                         </div>
                     </div>
+
+                    {isImporting && (
+                        <div className="mb-4 flex items-center gap-3 bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded">
+                            <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                            <span>Đang xử lý file CSV, vui lòng chờ...</span>
+                        </div>
+                    )}
+
+                    {importMessage && (
+                        <div className={`mb-4 px-4 py-3 rounded border ${
+                            importMessage.type === "success"
+                                ? "bg-green-50 border-green-200 text-green-800"
+                                : importMessage.type === "error"
+                                    ? "bg-red-50 border-red-200 text-red-800"
+                                    : "bg-blue-50 border-blue-200 text-blue-800"
+                        }`}>
+                            {importMessage.text}
+                        </div>
+                    )}
 
                     <div className="overflow-x-auto">
                         <table className="w-full text-left border-collapse">
