@@ -10,6 +10,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-database-compat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans">
     <div id="root"></div>
@@ -18,7 +19,6 @@
         const { useState, useEffect } = React;
 
         // --- CẤU HÌNH KẾT NỐI DATABASE ĐÁM MÂY (FIREBASE) ---
-        // Bạn hãy thay thế các chuỗi ký tự bên dưới bằng thông tin dự án Firebase của bạn
         const firebaseConfig = {
             apiKey: "AIzaSyDNi9xElgUcmw0310TP5rmCw2HQkgfP4EA",
             authDomain: "he-thong-thi-online-a12e0.firebaseapp.com",
@@ -29,18 +29,14 @@
             measurementId: "G-THZTDJ3PNV"
         };
 
-        // Khởi tạo kết nối hệ thống Firebase
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
         const db = firebase.database();
 
-        // Hàm sinh ID ngẫu nhiên nội bộ cho từng câu hỏi
         const generateId = () => Math.random().toString(36).substring(2, 15);
 
-        // --- CÁC COMPONENT GIAO DIỆN ---
-
-        // 1. Giao diện làm bài thi (Work-space)
+        // 1. Giao diện làm bài thi
         const QuizRunner = ({ exam, onComplete }) => {
             const [currentIndex, setCurrentIndex] = useState(0);
             const [selectedAnswer, setSelectedAnswer] = useState(null);
@@ -56,7 +52,7 @@
             const handleNext = () => {
                 const isCorrect = selectedAnswer === question.correctAnswer;
                 const newHistory = [...history, { question, selectedAnswer, isCorrect }];
-                
+
                 if (currentIndex < exam.questions.length - 1) {
                     setHistory(newHistory);
                     setCurrentIndex(currentIndex + 1);
@@ -71,7 +67,7 @@
                 <div className="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow mt-6">
                     <h2 className="text-xl font-bold mb-4 border-b pb-2">{exam.title} - Câu {currentIndex + 1}/{exam.questions.length}</h2>
                     <p className="text-lg font-medium mb-6">{question.content}</p>
-                    
+
                     <div className="space-y-3 mb-6">
                         {question.options.map((opt, idx) => {
                             let btnClass = "w-full text-left p-4 rounded-lg border transition-all ";
@@ -84,8 +80,8 @@
                             }
 
                             return (
-                                <button 
-                                    key={idx} 
+                                <button
+                                    key={idx}
                                     disabled={isChecked}
                                     onClick={() => setSelectedAnswer(idx)}
                                     className={btnClass}
@@ -105,15 +101,15 @@
 
                     <div className="flex justify-end">
                         {!isChecked ? (
-                            <button 
-                                onClick={handleCheck} 
+                            <button
+                                onClick={handleCheck}
                                 disabled={selectedAnswer === null}
                                 className="bg-blue-600 text-white px-6 py-2 rounded font-medium disabled:opacity-50"
                             >
                                 Kiểm tra
                             </button>
                         ) : (
-                            <button 
+                            <button
                                 onClick={handleNext}
                                 className="bg-indigo-600 text-white px-6 py-2 rounded font-medium"
                             >
@@ -125,10 +121,10 @@
             );
         };
 
-        // 2. Màn hình Kết quả (Result Screen)
+        // 2. Màn hình kết quả
         const ResultReview = ({ history, exam, onGoHome, onRetry }) => {
             const correctCount = history.filter(h => h.isCorrect).length;
-            
+
             return (
                 <div className="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow mt-6">
                     <div className="text-center mb-8">
@@ -146,7 +142,7 @@
                                         if (oIdx === item.question.correctAnswer) textClass += "bg-green-100 text-green-800 font-bold";
                                         else if (oIdx === item.selectedAnswer) textClass += "bg-red-100 text-red-800";
                                         else textClass += "bg-gray-50 text-gray-500";
-                                        
+
                                         return <div key={oIdx} className={textClass}>{String.fromCharCode(65 + oIdx)}. {opt}</div>;
                                     })}
                                 </div>
@@ -165,7 +161,7 @@
             );
         };
 
-        // 3. Trang chủ - Danh sách đề thi dành cho Guest
+        // 3. Trang chủ Guest
         const GuestPanel = ({ exams, onStartExam, loading }) => {
             if (loading) return <p className="text-center mt-10 text-gray-500 animate-pulse">Đang đồng bộ dữ liệu đề thi từ đám mây...</p>;
             if (exams.length === 0) return <p className="text-center mt-10 text-gray-500">Hiện tại chưa có đề thi nào trên hệ thống đám mây.</p>;
@@ -178,7 +174,7 @@
                                 <h3 className="text-lg font-bold mb-2 text-gray-800">{exam.title}</h3>
                                 <p className="text-gray-500 text-sm mb-4">Số lượng: {exam.questions.length} câu hỏi</p>
                             </div>
-                            <button 
+                            <button
                                 onClick={() => onStartExam(exam)}
                                 className="w-full bg-indigo-600 text-white py-2 rounded font-medium hover:bg-indigo-700 transition"
                             >
@@ -190,67 +186,99 @@
             );
         };
 
-        // 4. Phân hệ Admin - Quản lý và Import đề thi
+        // 4. Admin panel
         const AdminPanel = ({ exams, loading }) => {
             const handleImportCSV = (e) => {
-                const file = e.target.files[0];
+                const file = e.target.files?.[0];
                 if (!file) return;
 
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const text = event.target.result;
-                    const lines = text.split('\n');
-                    const questions = [];
-
-                    // Vòng lặp bỏ qua dòng tiêu đề đầu tiên của file CSV (i=1)
-                    for (let i = 1; i < lines.length; i++) {
-                        if (!lines[i].trim()) continue;
-                        const row = lines[i].split(',').map(item => item.trim());
-                        if (row.length >= 7) {
-                            questions.push({
-                                id: generateId(),
-                                content: row[0],
-                                options: [row[1], row[2], row[3], row[4]],
-                                correctAnswer: parseInt(row[5]),
-                                explanation: row[6]
-                            });
+                Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    transformHeader: (h) => h.replace(/^\uFEFF/, "").trim(),
+                    complete: ({ data, errors }) => {
+                        if (errors?.length) {
+                            alert("CSV parse lỗi: " + errors[0].message);
+                            e.target.value = "";
+                            return;
                         }
-                    }
 
-                    if (questions.length > 0) {
+                        const questions = data.map((row) => {
+                            const content = (row.Question || "").trim();
+                            const options = [
+                                (row.Option1 || "").trim(),
+                                (row.Option2 || "").trim(),
+                                (row.Option3 || "").trim(),
+                                (row.Option4 || "").trim()
+                            ];
+                            const correctAnswer = Number.parseInt((row["CorrectIndex(0-3)"] || "").trim(), 10);
+                            const explanation = (row.Explanation || "").trim();
+
+                            if (!content || options.some(o => !o) || !Number.isInteger(correctAnswer) || correctAnswer < 0 || correctAnswer > 3) {
+                                return null;
+                            }
+
+                            return {
+                                id: generateId(),
+                                content,
+                                options,
+                                correctAnswer,
+                                explanation
+                            };
+                        }).filter(Boolean);
+
+                        if (questions.length === 0) {
+                            alert("Không có câu hỏi hợp lệ. Kiểm tra đúng header: Question, Option1, Option2, Option3, Option4, CorrectIndex(0-3), Explanation");
+                            e.target.value = "";
+                            return;
+                        }
+
                         const newExam = {
-                            title: `Đề thi CSV - Ngày ${new Date().toLocaleDateString()}`,
+                            title: `Đề thi CSV - Ngày ${new Date().toLocaleDateString("vi-VN")}`,
                             createdAt: new Date().toISOString(),
-                            questions: questions
+                            questions
                         };
-                        
-                        // Đẩy trực tiếp bản ghi đề thi mới lên nhánh 'exams' của Firebase Realtime Database
-                        db.ref('exams').push(newExam)
-                            .then(() => alert('Import và phát tán đề thi lên đám mây thành công! Tất cả user hiện tại đều có thể xem.'))
-                            .catch(err => alert('Lỗi tải dữ liệu lên đám mây: ' + err.message));
-                    } else {
-                        alert('Định dạng file CSV không hợp lệ hoặc không chứa dữ liệu câu hỏi.');
+
+                        db.ref("exams").push(newExam)
+                            .then(() => alert(`Import thành công ${questions.length} câu hỏi lên đám mây!`))
+                            .catch(err => alert("Lỗi tải dữ liệu lên đám mây: " + err.message))
+                            .finally(() => {
+                                e.target.value = "";
+                            });
+                    },
+                    error: (err) => {
+                        alert("Không thể đọc file CSV: " + err.message);
+                        e.target.value = "";
                     }
-                };
-                reader.readAsText(file);
+                });
             };
 
             const downloadSampleCSV = () => {
-                const csvContent = "data:text/csv;charset=utf-8,Question,Option1,Option2,Option3,Option4,CorrectIndex(0-3),Explanation\nThủ đô của Việt Nam là gì?,Hồ Chí Minh,Hà Nội,Đà Nẵng,Huế,1,Hà Nội là thủ đô chính thức của nước Việt Nam.";
-                const encodedUri = encodeURI(csvContent);
+                const rows = [
+                    ["Question", "Option1", "Option2", "Option3", "Option4", "CorrectIndex(0-3)", "Explanation"],
+                    ["Thủ đô của Việt Nam là gì?", "Hồ Chí Minh", "Hà Nội", "Đà Nẵng", "Cần Thơ", "1", "Hà Nội là thủ đô của Việt Nam."],
+                    ["2 + 2 bằng bao nhiêu?", "3", "4", "5", "6", "1", "2 + 2 = 4."]
+                ];
+
+                const csv = rows
+                    .map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
+                    .join("\n");
+
+                const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
                 const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
+                link.href = URL.createObjectURL(blob);
                 link.setAttribute("download", "mau_de_thi.csv");
                 document.body.appendChild(link);
                 link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(link.href);
             };
 
             const handleDelete = (id) => {
-                if(confirm("Bạn có chắc chắn muốn xóa đề thi này vĩnh viễn trên hệ thống đám mây không?")) {
-                    // Thực hiện lệnh xóa trực tiếp node dữ liệu theo ID trên Firebase
+                if (confirm("Bạn có chắc chắn muốn xóa đề thi này vĩnh viễn trên hệ thống đám mây không?")) {
                     db.ref(`exams/${id}`).remove()
-                        .then(() => alert('Đã xóa đề thi khỏi hệ thống đám mây.'))
-                        .catch(err => alert('Lỗi xóa dữ liệu: ' + err.message));
+                        .then(() => alert("Đã xóa đề thi khỏi hệ thống đám mây."))
+                        .catch(err => alert("Lỗi xóa dữ liệu: " + err.message));
                 }
             };
 
@@ -297,22 +325,20 @@
             );
         };
 
-        // --- COMPONENT TỔNG CHỦ LƯU TRỮ TRẠNG THÁI (APP) ---
+        // App
         const App = () => {
-            const [role, setRole] = useState('GUEST'); // Phân quyền xem: 'ADMIN' hoặc 'GUEST'
+            const [role, setRole] = useState("GUEST");
             const [exams, setExams] = useState([]);
             const [loading, setLoading] = useState(true);
-            const [currentView, setCurrentView] = useState('HOME'); 
+            const [currentView, setCurrentView] = useState("HOME");
             const [activeExam, setActiveExam] = useState(null);
             const [quizHistory, setQuizHistory] = useState([]);
 
-            // Kỹ thuật Realtime Listener: Lắng nghe sự biến động dữ liệu trên Cloud Firebase
             useEffect(() => {
-                const examsRef = db.ref('exams');
-                examsRef.on('value', (snapshot) => {
+                const examsRef = db.ref("exams");
+                examsRef.on("value", (snapshot) => {
                     const data = snapshot.val();
                     if (data) {
-                        // Chuyển đổi cấu trúc Object dạng Key-Value của Firebase thành Mảng để React map dễ dàng
                         const examList = Object.keys(data).map(key => ({
                             id: key,
                             ...data[key]
@@ -327,47 +353,44 @@
                     setLoading(false);
                 });
 
-                // Hủy kết nối ngầm khi cấu trúc ứng dụng đóng lại để tối ưu bộ nhớ
                 return () => examsRef.off();
             }, []);
 
             const startExam = (exam) => {
                 setActiveExam(exam);
-                setCurrentView('QUIZ');
+                setCurrentView("QUIZ");
             };
 
-            const finishExam = (history, exam) => {
+            const finishExam = (history) => {
                 setQuizHistory(history);
-                setCurrentView('RESULT');
+                setCurrentView("RESULT");
             };
 
             return (
                 <div className="min-h-screen flex flex-col bg-gray-50">
-                    {/* Thanh Điều Hướng (Responsive Header) */}
                     <header className="bg-white shadow-sm border-b p-4">
                         <div className="max-w-6xl mx-auto flex justify-between items-center">
-                            <h1 onClick={() => setCurrentView('HOME')} className="text-xl font-bold text-indigo-700 cursor-pointer select-none">Hệ Thống Thi Online Cloud</h1>
-                            <button 
-                                onClick={() => { setRole(role === 'ADMIN' ? 'GUEST' : 'ADMIN'); setCurrentView('HOME'); }}
+                            <h1 onClick={() => setCurrentView("HOME")} className="text-xl font-bold text-indigo-700 cursor-pointer select-none">Hệ Thống Thi Online Cloud</h1>
+                            <button
+                                onClick={() => { setRole(role === "ADMIN" ? "GUEST" : "ADMIN"); setCurrentView("HOME"); }}
                                 className="bg-gray-800 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-gray-900 transition"
                             >
-                                Góc nhìn: {role === 'ADMIN' ? 'Giao diện Admin' : 'Giao diện Thí sinh'}
+                                Góc nhìn: {role === "ADMIN" ? "Giao diện Admin" : "Giao diện Thí sinh"}
                             </button>
                         </div>
                     </header>
 
-                    {/* Vùng Hiển Thị Nội Dung Chính */}
                     <main className="flex-grow p-4 max-w-6xl mx-auto w-full">
-                        {currentView === 'HOME' && role === 'ADMIN' && <AdminPanel exams={exams} loading={loading} />}
-                        {currentView === 'HOME' && role === 'GUEST' && <GuestPanel exams={exams} onStartExam={startExam} loading={loading} />}
-                        {currentView === 'QUIZ' && <QuizRunner exam={activeExam} onComplete={finishExam} />}
-                        {currentView === 'RESULT' && <ResultReview history={quizHistory} exam={activeExam} onGoHome={() => setCurrentView('HOME')} onRetry={() => startExam(activeExam)} />}
+                        {currentView === "HOME" && role === "ADMIN" && <AdminPanel exams={exams} loading={loading} />}
+                        {currentView === "HOME" && role === "GUEST" && <GuestPanel exams={exams} onStartExam={startExam} loading={loading} />}
+                        {currentView === "QUIZ" && <QuizRunner exam={activeExam} onComplete={finishExam} />}
+                        {currentView === "RESULT" && <ResultReview history={quizHistory} exam={activeExam} onGoHome={() => setCurrentView("HOME")} onRetry={() => startExam(activeExam)} />}
                     </main>
                 </div>
             );
         };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
+        const root = ReactDOM.createRoot(document.getElementById("root"));
         root.render(<App />);
     </script>
 </body>
